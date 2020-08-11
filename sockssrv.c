@@ -33,6 +33,13 @@
 #include <arpa/inet.h>
 #include <errno.h>
 #include <limits.h>
+#include <fcntl.h>
+
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
 #include "server.h"
 #include "sblist.h"
 
@@ -383,6 +390,50 @@ static void zero_arg(char *s) {
 	for(i=0;i<l;i++) s[i] = 0;
 }
 
+static int nr_file_adjust(void)
+{
+	int ret, fd, max = 1024 * 1024, prev;
+	char path[] = "/proc/sys/fs/nr_open";
+	char buf[64];
+	struct rlimit rlim;
+
+	/* Avoid oom-killer */
+	fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		fprintf(stderr, "Can't open %s, %m\n", path);
+		goto set_rlimit;
+	}
+	ret = read(fd, buf, sizeof(buf));
+	if (ret < 0) {
+		fprintf(stderr, "Can't read %s, %m\n", path);
+		close(fd);
+		return errno;
+	}
+	close(fd);
+	max = atoi(buf);
+
+set_rlimit:
+	ret = getrlimit(RLIMIT_NOFILE, &rlim);
+	if (ret < 0)
+		prev = 0;
+	else
+		prev = rlim.rlim_cur;
+
+	rlim.rlim_cur = rlim.rlim_max = max;
+
+	ret = setrlimit(RLIMIT_NOFILE, &rlim);
+	if (ret < 0) {
+		fprintf(stderr, "Can't adjust nr_open %d %m\n", max);
+	} else {
+		if (prev == 0)
+			printf("Adjusted nr_open to %d\n", max);
+		else
+			printf("Adjusted nr_open from %d to %d\n", prev, max);
+	}
+
+	return 0;
+}
+
 int main(int argc, char** argv) {
 	int ch;
 	const char *listenip = "0.0.0.0";
@@ -424,6 +475,9 @@ int main(int argc, char** argv) {
 		dprintf(2, "error: auth-once option must be used together with user/pass\n");
 		return 1;
 	}
+
+	nr_file_adjust();
+
 	signal(SIGPIPE, SIG_IGN);
 	struct server s;
 	sblist *threads = sblist_new(sizeof (struct thread*), 8);
