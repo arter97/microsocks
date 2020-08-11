@@ -10,7 +10,7 @@ OBJS = $(SRCS:.c=.o)
 
 LIBS = -lpthread
 
-CFLAGS += -O3 -flto -march=native -mtune=native -Wall -std=c99
+CFLAGS += -O3 -flto -march=native -mtune=native -Wall -std=c99 -Wno-unknown-pragmas
 LDFLAGS += $(CFLAGS)
 
 -include config.mak
