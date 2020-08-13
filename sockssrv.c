@@ -478,6 +478,12 @@ int main(int argc, char** argv) {
 
 	nr_file_adjust();
 
+	struct sched_param sp = { .sched_priority = 50 };
+	if (sched_setscheduler(0, SCHED_RR, &sp) == -1) {
+		perror("Failed to set process scheduler policy to SCHED_RR");
+		fprintf(stderr, "Performance might be reduced\n");
+	}
+
 	signal(SIGPIPE, SIG_IGN);
 	struct server s;
 	sblist *threads = sblist_new(sizeof (struct thread*), 8);
